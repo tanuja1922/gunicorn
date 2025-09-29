@@ -1,0 +1,89 @@
+Gunicorn 
+
+it's python library used to handle multiple requests at a time.
+
+The default Flask development server runs in single-threaded mode. 
+means...Only one request is processed at a time.
+If OCR takes 5 seconds, another user has to wait until that finishes.
+
+
+
+
+
+app.python
+
+from flask import Flask, request, jsonify
+import pytesseract
+from PIL import Image
+import io
+import time
+
+app = Flask(__name__)
+
+# For Windows: set explicit path if needed
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+@app.route("/ocr", methods=["POST"])
+def ocr():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    try:
+        img = Image.open(io.BytesIO(file.read()))
+        text = pytesseract.image_to_string(img)
+
+        # Simulate heavy CPU work (to see concurrency clearly)
+        time.sleep(2)
+
+        return jsonify({
+            "filename": file.filename,
+            "extracted_text": text.strip()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+	
+	
+	
+	
+	
+	
+	
+	
+	test-script.py
+	
+	import requests
+from concurrent.futures import ThreadPoolExecutor
+
+URL = "http://127.0.0.1:5000/ocr"
+FILES = ["image.png", "image1.png", "image4.jpg", "image4.webp"]
+
+def send_file(filename):
+    with open(filename, "rb") as f:
+        files = {"file": (filename, f)}
+        resp = requests.post(URL, files=files)
+        try:
+            return resp.json()
+        except Exception:
+            return {"error": "Invalid response"}
+
+def main():
+    # Use a pool of workers to send multiple requests at once
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(send_file, fname) for fname in FILES]
+
+        for i, fut in enumerate(futures):
+            print(f"Response for {FILES[i]}: {fut.result()}")
+
+if __name__ == "__main__":
+    main()
+	
+	
+	
+	
+	
+	
+	
